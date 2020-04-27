@@ -9,7 +9,7 @@
 #import <Foundation/Foundation.h>
 #include <pthread.h>
 
-#define kCondition 0
+#define kCondition 1
 #define kOperation 0
 
 @interface MyNonConcurrentOperation : NSOperation {
@@ -264,8 +264,8 @@ int main(int argc, const char * argv[]) {
                         }
                         for (int i = 0; i < 5; ++i) {
                             [shareArray insertObject:@(i) atIndex:index++];
+                            NSLog(@"producer :%d", index);
                         }
-                        NSLog(@"producer :%d", index);
                         [lock unlock];
                     }];
                     
@@ -295,8 +295,8 @@ int main(int argc, const char * argv[]) {
                     NSBlockOperation *po = [NSBlockOperation blockOperationWithBlock:^{
                         for (int i = 0; i < 5; ++i) {
                             [shareArray insertObject:@(i) atIndex:index++];
+                            NSLog(@"NSOperationQueue producer :%d", index);
                         }
-                        NSLog(@"NSOperationQueue producer :%d", index);
                     }];
                     
                     NSBlockOperation *co = [NSBlockOperation blockOperationWithBlock:^{
@@ -316,21 +316,19 @@ int main(int argc, const char * argv[]) {
         #else
                 
                 dispatch_queue_t sq = dispatch_queue_create("sq.demo", DISPATCH_QUEUE_SERIAL);
-                while (1) {
+                while (1) { // 线性队列，保证了异步提交、同步执行
                     dispatch_async(sq, ^{
                         for (int i = 0; i < 5; ++i) {
                             [shareArray insertObject:@(i) atIndex:index++];
+                            NSLog(@"GCD producer :%d", index);
                         }
-                        NSLog(@"GCD producer :%d", index);
                     });
                     dispatch_async(sq, ^{
                         for (int i = 0; i < 5; ++i) {
-                            
                             if (index >= 1) {
                                 [shareArray removeObjectAtIndex:--index];
                                 NSLog(@"GCD consumer :%d", index);
                             }
-                            
                         }
                     });
                 }
