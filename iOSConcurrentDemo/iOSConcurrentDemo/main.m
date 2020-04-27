@@ -10,9 +10,34 @@
 #include <pthread.h>
 
 #define kCondition 0
-#define kOperation 0
-#define kSerial 1
+#define kOperation 1
+#define kSerial 0
 #define kConcurrent 0
+
+@interface Singleton : NSObject
++ (instancetype)instance;
+@end
+
+static Singleton *s;
+@implementation Singleton
+
++ (instancetype)instance {
+    static dispatch_once_t onceToken;
+    dispatch_once(&onceToken, ^{
+        if (s == nil) {
+            s = [[Singleton alloc] init];
+        }
+    });
+    return s;
+}
+
+- (void)observeValueForKeyPath:(NSString *)keyPath ofObject:(id)object change:(NSDictionary *)change context:(void *)context
+{
+    NSLog(@"keypath:%@, change:%@", keyPath, change);
+}
+
+@end
+
 
 @interface MyNonConcurrentOperation : NSOperation {
     id myData;
@@ -287,28 +312,31 @@ int main(int argc, const char * argv[]) {
             }];
         }
 #elif kOperation
-        
-        NSOperationQueue *oq = [NSOperationQueue new];
-        //        oq.maxConcurrentOperationCount = 1;
+        // 默认队列支持串行和并行
+        NSOperationQueue *oq = [[NSOperationQueue alloc] init];
+        [oq addObserver:[Singleton instance] forKeyPath:@"maxConcurrentOperationCount" options:NSKeyValueObservingOptionInitial | NSKeyValueObservingOptionNew | NSKeyValueObservingOptionPrior | NSKeyValueObservingOptionOld context:nil];
+        oq.name = @"test.queue";
+        // 默认，-1(NSOperationQueueDefaultMaxConcurrentOperationCount),表示不限制并行数量（坑!）
+        // 1，串行队列
+        // > 1, 并行队列
+        oq.maxConcurrentOperationCount = 4; //(which is recommended) // 最好是根据核数
         while (1) {
             //            NONCurrentOperation *CCO = [[NONCurrentOperation alloc] initWithData:@[@"name1 ", @"name2"]];
             //            [oq addOperation:CCO];
             
             NSBlockOperation *po = [NSBlockOperation blockOperationWithBlock:^{
-                for (int i = 0; i < 5; ++i) {
-                    [shareArray insertObject:@(i) atIndex:index++];
-                    NSLog(@"NSOperationQueue producer :%d", index);
-                }
+                NSLog(@"NSOperationQueue producer :%d", index);
+                [shareArray addObject:@(index++)];
             }];
             
             NSBlockOperation *co = [NSBlockOperation blockOperationWithBlock:^{
-                for (int i = 0; i < 5; ++i) {
-                    if (index >= 1) {
-                        [shareArray removeObjectAtIndex:--index];
-                        NSLog(@"NSOperationQueue consumer :%d", index);
-                    }
+                for (id object in shareArray) {
+                    NSLog(@"NSOperationQueue consumer :%@", object);
                 }
+                [shareArray removeAllObjects];
             }];
+            // 如果是串行，则不需要依赖
+            // 如果是并行，则需要依赖，否则对可变内存就会出现IO问题，需要加同步锁
             [co addDependency:po];
             [oq addOperation:co];
             [oq addOperation:po];
