@@ -9,8 +9,10 @@
 #import <Foundation/Foundation.h>
 #include <pthread.h>
 
-#define kCondition 1
+#define kCondition 0
 #define kOperation 0
+#define kSerial 1
+#define kConcurrent 0
 
 @interface MyNonConcurrentOperation : NSOperation {
     id myData;
@@ -210,15 +212,15 @@ int main(int argc, const char * argv[]) {
         NSLog(@"Hello, World!");
 #pragma mark - Operation
         for (int i = 0; i < 2; ++i) {
-//        [[[[MyCustomClass alloc] init] taskWithData:nil] start];
-        NSOperationQueue* q = [[NSOperationQueue alloc] init];
+            //        [[[[MyCustomClass alloc] init] taskWithData:nil] start];
+            NSOperationQueue* q = [[NSOperationQueue alloc] init];
             [q setMaxConcurrentOperationCount:3];
-//        NSOperationQueue *q = [NSOperationQueue currentQueue];
-        [q addOperation:[[MyCustomClass new] taskWithData:nil]];
-        [q addOperation: [[MyCustomClass new] taskWithBlock:nil]];
-        [q addOperation:[[MyNonConcurrentOperation alloc] initWithData:nil]];
-        [q addOperation:[[MyConcurrentOperation alloc] init]];
-//        [[[MyNonConcurrentOperation alloc] initWithData:nil] start];
+            //        NSOperationQueue *q = [NSOperationQueue currentQueue];
+            [q addOperation:[[MyCustomClass new] taskWithData:nil]];
+            [q addOperation: [[MyCustomClass new] taskWithBlock:nil]];
+            [q addOperation:[[MyNonConcurrentOperation alloc] initWithData:nil]];
+            [q addOperation:[[MyConcurrentOperation alloc] init]];
+            //        [[[MyNonConcurrentOperation alloc] initWithData:nil] start];
         }
 #pragma mark - GCD
         // 并发队列
@@ -252,88 +254,119 @@ int main(int argc, const char * argv[]) {
         __block int index = 0;
         //        OSAtomicEnqueue( &q, &index, sizeof(int));
         //        OSAtomicEnqueue( &q, &index, sizeof(int));
-        #if kCondition
-                NSCondition *lock = [[NSCondition alloc] init];
-                //        NSCondition *lock = nil;
-                while (1) {
-                    [NSThread detachNewThreadWithBlock:^{
-                        [lock lock];
-                        while (index >= 5) {
-                            [lock wait];
-                            NSLog(@"wait....");
-                        }
-                        for (int i = 0; i < 5; ++i) {
-                            [shareArray insertObject:@(i) atIndex:index++];
-                            NSLog(@"producer :%d", index);
-                        }
-                        [lock unlock];
-                    }];
-                    
-                    [NSThread detachNewThreadWithBlock:^{
-                        [lock lock];
-                        for (int i = 0; i < 5; ++i) {
-                            
-                            if (index >= 1) {
-                                [shareArray removeObjectAtIndex:--index];
-                                NSLog(@"consumer :%d", index);
-                            }
-                            
-                        }
-                        [lock signal];
-                        
-                        [lock unlock];
-                    }];
+#if kCondition
+        NSCondition *lock = [[NSCondition alloc] init];
+        //        NSCondition *lock = nil;
+        while (1) {
+            [NSThread detachNewThreadWithBlock:^{
+                [lock lock];
+                while (index >= 5) {
+                    [lock wait];
+                    NSLog(@"wait....");
                 }
-        #elif kOperation
-                
-                NSOperationQueue *oq = [NSOperationQueue new];
-                //        oq.maxConcurrentOperationCount = 1;
-                while (1) {
-                    //            NONCurrentOperation *CCO = [[NONCurrentOperation alloc] initWithData:@[@"name1 ", @"name2"]];
-                    //            [oq addOperation:CCO];
-                    
-                    NSBlockOperation *po = [NSBlockOperation blockOperationWithBlock:^{
-                        for (int i = 0; i < 5; ++i) {
-                            [shareArray insertObject:@(i) atIndex:index++];
-                            NSLog(@"NSOperationQueue producer :%d", index);
-                        }
-                    }];
-                    
-                    NSBlockOperation *co = [NSBlockOperation blockOperationWithBlock:^{
-                        for (int i = 0; i < 5; ++i) {
-                            if (index >= 1) {
-                                [shareArray removeObjectAtIndex:--index];
-                                NSLog(@"NSOperationQueue consumer :%d", index);
-                            }
-                        }
-                    }];
-                    [co addDependency:po];
-                    [oq addOperation:co];
-                    [oq addOperation:po];
-                    [oq waitUntilAllOperationsAreFinished];
+                for (int i = 0; i < 5; ++i) {
+                    [shareArray insertObject:@(i) atIndex:index++];
+                    NSLog(@"producer :%d", index);
                 }
-                
-        #else
-                
-                dispatch_queue_t sq = dispatch_queue_create("sq.demo", DISPATCH_QUEUE_SERIAL);
-                while (1) { // 线性队列，保证了异步提交、同步执行
-                    dispatch_async(sq, ^{
-                        for (int i = 0; i < 5; ++i) {
-                            [shareArray insertObject:@(i) atIndex:index++];
-                            NSLog(@"GCD producer :%d", index);
-                        }
-                    });
-                    dispatch_async(sq, ^{
-                        for (int i = 0; i < 5; ++i) {
-                            if (index >= 1) {
-                                [shareArray removeObjectAtIndex:--index];
-                                NSLog(@"GCD consumer :%d", index);
-                            }
-                        }
-                    });
+                [lock unlock];
+            }];
+            
+            [NSThread detachNewThreadWithBlock:^{
+                [lock lock];
+                for (int i = 0; i < 5; ++i) {
+                    
+                    if (index >= 1) {
+                        [shareArray removeObjectAtIndex:--index];
+                        NSLog(@"consumer :%d", index);
+                    }
+                    
                 }
+                [lock signal];
                 
-        #endif
+                [lock unlock];
+            }];
+        }
+#elif kOperation
+        
+        NSOperationQueue *oq = [NSOperationQueue new];
+        //        oq.maxConcurrentOperationCount = 1;
+        while (1) {
+            //            NONCurrentOperation *CCO = [[NONCurrentOperation alloc] initWithData:@[@"name1 ", @"name2"]];
+            //            [oq addOperation:CCO];
+            
+            NSBlockOperation *po = [NSBlockOperation blockOperationWithBlock:^{
+                for (int i = 0; i < 5; ++i) {
+                    [shareArray insertObject:@(i) atIndex:index++];
+                    NSLog(@"NSOperationQueue producer :%d", index);
+                }
+            }];
+            
+            NSBlockOperation *co = [NSBlockOperation blockOperationWithBlock:^{
+                for (int i = 0; i < 5; ++i) {
+                    if (index >= 1) {
+                        [shareArray removeObjectAtIndex:--index];
+                        NSLog(@"NSOperationQueue consumer :%d", index);
+                    }
+                }
+            }];
+            [co addDependency:po];
+            [oq addOperation:co];
+            [oq addOperation:po];
+            [oq waitUntilAllOperationsAreFinished];
+        }
+        
+#elif kSerial
+        dispatch_queue_t sq = dispatch_queue_create("sq.demo", DISPATCH_QUEUE_SERIAL);
+        while (1) { // 线性队列，保证了异步提交、同步执行
+//            if (++index % 7 == 0) { // 外部递增
+//                dispatch_async(sq, ^{ // 但是当提交到queue，得到处理时，index可能已经发生了变化，所以不正确
+//                    NSLog(@"GCD producer :%d", index);
+//                    [shareArray addObject:@(index)];
+//                });
+//            }
+            dispatch_async(sq, ^{
+                if (++index % 7 == 0) {
+                    NSLog(@"GCD producer :%d", index);
+                    [shareArray addObject:@(index)];
+                }
+            });
+            dispatch_async(sq, ^{
+                for (id object in shareArray) {
+                    NSLog(@"GCD consumer :%@", object);
+                }
+                [shareArray removeAllObjects];
+            });
+        }
+        
+#elif kConcurrent
+        // 如果是并发队列，则对可变对象需要加锁，否则就会遇到IO冲突
+        // 适合顺序无关的生产消费
+        dispatch_queue_t cq = dispatch_queue_create("cq.demo", DISPATCH_QUEUE_CONCURRENT);
+        int cindex = 0;
+        NSMutableArray *dataArray = [NSMutableArray array];
+        while (1) {
+            if (++cindex % 7 == 0) {// 生产的触发条件
+                dispatch_async(cq, ^{
+                    @synchronized (dataArray) {
+                        NSLog(@"concurrent producer: %@", @(cindex));
+                        [dataArray addObject:@(cindex)];
+                    }
+                });
+            }
+            
+            
+            dispatch_async(cq, ^{
+                @synchronized (dataArray) {
+                    for (id object in dataArray) {
+                        NSLog(@"concurrent consumer: %@", object);
+                    }
+                    [dataArray removeAllObjects];
+                }
+            });
+        }
+#else
+        
+#endif
         
     }
     return 0;
