@@ -10,9 +10,10 @@
 #include <pthread.h>
 
 #define kCondition 0
-#define kOperation 1
+#define kOperation 0
 #define kSerial 0
 #define kConcurrent 0
+#define kPatchGroup 1
 
 @interface Singleton : NSObject
 + (instancetype)instance;
@@ -392,6 +393,29 @@ int main(int argc, const char * argv[]) {
                 }
             });
         }
+#elif kPatchGroup
+        NSLog(@"start aync task in group task");
+        dispatch_group_t taskGrooup = dispatch_group_create();
+        for (int i = 0; i < 100; ++i) {
+            dispatch_group_enter(taskGrooup);
+            dispatch_group_async(taskGrooup, dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^{
+                NSLog(@"this is a block task end");
+                dispatch_group_leave(taskGrooup);
+            });
+        }
+        // 在group完成任务之后,通过block通知外部group中的任务完成，这个可以在不使用wait等待的时候，得到group的任务情况
+        dispatch_group_notify(taskGrooup, dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^{
+            NSLog(@"this is a notify block after group task end");
+        });
+        NSLog(@"aync task after group task");
+        // 此步骤等同于下一步的wait
+        while (1) {
+
+        }
+        // 如果不等待，遇到程序结束，group中的全部task有的可能未执行
+//        dispatch_group_wait(taskGrooup, DISPATCH_TIME_FOREVER);
+        
+
 #else
         
 #endif
