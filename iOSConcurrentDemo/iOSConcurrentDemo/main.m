@@ -122,7 +122,10 @@ static Singleton *s;
     }
     
     [self willChangeValueForKey:@"isExecuting"];
-    [NSThread detachNewThreadSelector:@selector(main) toTarget:self withObject:nil];
+    // main执行完毕之后，thread会是释放，当再次创建对象的时候，则同样会重新创建线程
+//    [NSThread detachNewThreadSelector:@selector(main) toTarget:self withObject:nil];
+    // 通过 runloop 可以复用一个thread对象
+    [self performSelector:@selector(main) onThread:[MyConcurrentOperation networkRequestThread] withObject:nil waitUntilDone:NO modes:@[NSRunLoopCommonModes,NSDefaultRunLoopMode]];
     executing = YES;
     [self didChangeValueForKey:@"isExecuting"];
 }
@@ -133,6 +136,7 @@ static Singleton *s;
         @autoreleasepool {
             NSLog(@"do my concurrent job!");
             [self completeOperation];
+            NSLog(@"operation thread %@", [NSThread currentThread]);
         }
         
     } @catch (NSException *exception) {
@@ -153,6 +157,24 @@ static Singleton *s;
     
 }
 
++(void)networkRequestThreadEntryPoint:(id)__unusedobject{
+    @autoreleasepool{
+        [[NSThread currentThread] setName:@"MyBackroundThread"];
+        NSRunLoop *runLoop=[NSRunLoop currentRunLoop];
+        [runLoop addPort:[NSMachPort port]forMode:NSDefaultRunLoopMode];
+        [runLoop run];
+    }
+}
+
++(NSThread*)networkRequestThread{
+    static NSThread * _networkRequestThread=nil;
+    static dispatch_once_t oncePredicate;
+    dispatch_once(&oncePredicate,^{
+        _networkRequestThread = [[NSThread alloc]initWithTarget:self selector:@selector(networkRequestThreadEntryPoint:)object:nil];
+        [_networkRequestThread start];
+    });
+    return _networkRequestThread;
+}
 
 @end
 
@@ -172,6 +194,8 @@ static Singleton *s;
 
 - (NSOperation *)taskWithBlock:(id)data {
     NSBlockOperation *op = [NSBlockOperation blockOperationWithBlock:^{
+        NSLog(@"operation thread %@", [NSThread currentThread]);
+        NSLog(@"main thread %@", [NSThread mainThread]);
         NSLog(@"do block1 task!");
     }];
     [op addExecutionBlock:^{
@@ -237,17 +261,21 @@ int main(int argc, const char * argv[]) {
         // insert code here...
         NSLog(@"Hello, World!");
 #pragma mark - Operation
-        for (int i = 0; i < 2; ++i) {
-            //        [[[[MyCustomClass alloc] init] taskWithData:nil] start];
-            NSOperationQueue* q = [[NSOperationQueue alloc] init];
-            [q setMaxConcurrentOperationCount:3];
-            //        NSOperationQueue *q = [NSOperationQueue currentQueue];
-            [q addOperation:[[MyCustomClass new] taskWithData:nil]];
-            [q addOperation: [[MyCustomClass new] taskWithBlock:nil]];
-            [q addOperation:[[MyNonConcurrentOperation alloc] initWithData:nil]];
-            [q addOperation:[[MyConcurrentOperation alloc] init]];
-            //        [[[MyNonConcurrentOperation alloc] initWithData:nil] start];
-        }
+        //        [[[[MyCustomClass alloc] init] taskWithData:nil] start];
+        NSOperationQueue* q = [[NSOperationQueue alloc] init];
+        q.maxConcurrentOperationCount = 3;
+        [q addOperation:[[MyCustomClass new] taskWithData:nil]];
+        [q addOperation: [[MyCustomClass new] taskWithBlock:nil]];
+        [q addOperation:[[MyNonConcurrentOperation alloc] initWithData:nil]];
+        [q addOperation:[[MyConcurrentOperation alloc] init]];
+        [q addOperation:[[MyConcurrentOperation alloc] init]];
+        [q addOperation:[[MyConcurrentOperation alloc] init]];
+        [q addOperation:[[MyConcurrentOperation alloc] init]];
+        [q addOperation:[[MyConcurrentOperation alloc] init]];
+        [q addOperation:[[MyConcurrentOperation alloc] init]];
+        [q addOperation:[[MyConcurrentOperation alloc] init]];
+        [q addOperation:[[MyConcurrentOperation alloc] init]];
+        //        [[[MyNonConcurrentOperation alloc] initWithData:nil] start];
 #pragma mark - GCD
         // 并发队列
         dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0);
@@ -274,7 +302,7 @@ int main(int argc, const char * argv[]) {
             [NSThread detachNewThreadSelector:@selector(task2) toTarget:to1 withObject:nil];
         }
 #endif
-        OSQueueHead q = OS_ATOMIC_QUEUE_INIT;
+//        OSQueueHead q = OS_ATOMIC_QUEUE_INIT;
         NSMutableArray *shareArray = [NSMutableArray new];
         //        __block volatile int index = 0;
         __block int index = 0;
