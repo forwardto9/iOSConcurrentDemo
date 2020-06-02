@@ -63,7 +63,7 @@ static Singleton *s;
         @autoreleasepool {
             BOOL isDone = NO;
             while (!self.cancelled && !isDone) {
-                NSLog(@"do my non-current operation job!");
+                NSLog(@"do my non-current operation job on thread %@!", [NSThread currentThread]);
                 isDone = YES;
             }
         }
@@ -134,9 +134,8 @@ static Singleton *s;
 - (void)main {
     @try {
         @autoreleasepool {
-            NSLog(@"do my concurrent job!");
+            NSLog(@"do my concurrent job on thread %@", [NSThread currentThread]);
             [self completeOperation];
-            NSLog(@"operation thread %@", [NSThread currentThread]);
         }
         
     } @catch (NSException *exception) {
@@ -194,22 +193,20 @@ static Singleton *s;
 
 - (NSOperation *)taskWithBlock:(id)data {
     NSBlockOperation *op = [NSBlockOperation blockOperationWithBlock:^{
-        NSLog(@"operation thread %@", [NSThread currentThread]);
-        NSLog(@"main thread %@", [NSThread mainThread]);
-        NSLog(@"do block1 task!");
+        NSLog(@"do block1 task on thread %@", [NSThread currentThread]);
     }];
     [op addExecutionBlock:^{
-        NSLog(@"do block2 task!");
+        NSLog(@"do block2 task on thread %@", [NSThread currentThread]);
     }];
     [op addExecutionBlock:^{
-        NSLog(@"do block3 task!");
+        NSLog(@"do block3 task on thread %@", [NSThread currentThread]);
     }];
     return op;
 }
 
 
 - (void)taskMethod:(id)data {
-    NSLog(@"do invocation task!");
+    NSLog(@"do invocation task on thread %@", [NSThread currentThread]);
 }
 
 @end
