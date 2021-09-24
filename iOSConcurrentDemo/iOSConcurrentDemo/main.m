@@ -8,12 +8,15 @@
 
 #import <Foundation/Foundation.h>
 #include <pthread.h>
+#import "MyConcurrentOperation.h"
+#import "MyNonConcurrentOperation.h"
 
 #define kCondition 0
 #define kOperation 0
 #define kSerial 0
 #define kConcurrent 0
-#define kPatchGroup 1
+#define kPatchGroup 0
+#define kWorkloop 1
 
 @interface Singleton : NSObject
 + (instancetype)instance;
@@ -38,145 +41,6 @@ static Singleton *s;
 }
 
 @end
-
-
-@interface MyNonConcurrentOperation : NSOperation {
-    id myData;
-}
-
-- (instancetype)initWithData:(id)data;
-
-@end
-
-@implementation MyNonConcurrentOperation
-
-- (instancetype)initWithData:(id)data {
-    if (self = [super init]) {
-        myData = data;
-    }
-    
-    return self;
-}
-
-- (void)main {
-    @try {
-        @autoreleasepool {
-            BOOL isDone = NO;
-            while (!self.cancelled && !isDone) {
-                NSLog(@"do my non-current operation job on thread %@!", [NSThread currentThread]);
-                isDone = YES;
-            }
-        }
-        
-    } @catch (NSException *exception) {
-        //
-    } @finally {
-        //
-    }
-}
-
-- (BOOL)isFinished {
-    return myData != nil;
-}
-
-@end
-
-@interface MyConcurrentOperation : NSOperation {
-    BOOL executing;
-    BOOL finished;
-}
-
-- (void)completeOperation;
-
-@end
-
-@implementation MyConcurrentOperation
-
-- (instancetype)init {
-    if (self = [super init]) {
-        executing = NO;
-        finished = NO;
-    }
-    return self;
-}
-
-- (BOOL)isConcurrent {
-    return YES;
-}
-
-- (BOOL)isExecuting {
-    return executing;
-}
-
-- (BOOL)isFinished {
-    return finished;
-}
-
-- (void)start {
-    if (self.cancelled) {
-        [self willChangeValueForKey:@"isFinished"];
-        finished = YES;
-        [self didChangeValueForKey:@"isFinished"];
-        
-        return;
-    }
-    
-    [self willChangeValueForKey:@"isExecuting"];
-    // main执行完毕之后，thread会是释放，当再次创建对象的时候，则同样会重新创建线程
-//    [NSThread detachNewThreadSelector:@selector(main) toTarget:self withObject:nil];
-    // 通过 runloop 可以复用一个thread对象
-    [self performSelector:@selector(main) onThread:[MyConcurrentOperation networkRequestThread] withObject:nil waitUntilDone:NO modes:@[NSRunLoopCommonModes,NSDefaultRunLoopMode]];
-    executing = YES;
-    [self didChangeValueForKey:@"isExecuting"];
-}
-
-
-- (void)main {
-    @try {
-        @autoreleasepool {
-            NSLog(@"do my concurrent job on thread %@", [NSThread currentThread]);
-            [self completeOperation];
-        }
-        
-    } @catch (NSException *exception) {
-        //
-    } @finally {
-        //
-    }
-    
-}
-
-- (void)completeOperation {
-    [self willChangeValueForKey:@"isFinished"];
-    [self willChangeValueForKey:@"isExecuting"];
-    finished = YES;
-    executing = NO;
-    [self didChangeValueForKey:@"isExecuting"];
-    [self didChangeValueForKey:@"isFinished"];
-    
-}
-
-+(void)networkRequestThreadEntryPoint:(id)__unusedobject{
-    @autoreleasepool{
-        [[NSThread currentThread] setName:@"MyBackroundThread"];
-        NSRunLoop *runLoop=[NSRunLoop currentRunLoop];
-        [runLoop addPort:[NSMachPort port]forMode:NSDefaultRunLoopMode];
-        [runLoop run];
-    }
-}
-
-+(NSThread*)networkRequestThread{
-    static NSThread * _networkRequestThread=nil;
-    static dispatch_once_t oncePredicate;
-    dispatch_once(&oncePredicate,^{
-        _networkRequestThread = [[NSThread alloc]initWithTarget:self selector:@selector(networkRequestThreadEntryPoint:)object:nil];
-        [_networkRequestThread start];
-    });
-    return _networkRequestThread;
-}
-
-@end
-
 
 
 
@@ -275,12 +139,10 @@ int main(int argc, const char * argv[]) {
         //        [[[MyNonConcurrentOperation alloc] initWithData:nil] start];
 #pragma mark - GCD
         // 并发队列
-        dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0);
-        // 串行队列
-        dispatch_queue_create("com.demo.queue", NULL);
-        
-        dispatch_get_current_queue();
-        
+        __unused dispatch_queue_t gq = dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0);
+        // 串行队列, 第二个参数不填写默认是串行
+        __unused dispatch_queue_t usq = dispatch_queue_create("com.demo.queue", NULL);
+        __unused dispatch_queue_t csq = dispatch_get_current_queue();
 #if 0
         NSLog(@"isMultiThreaded :%d", [NSThread isMultiThreaded]);
         ThreadObject *to1 = [ThreadObject new];
@@ -433,18 +295,52 @@ int main(int argc, const char * argv[]) {
             NSLog(@"this is a notify block after group task end");
         });
         NSLog(@"aync task after group task");
-        // 此步骤等同于下一步的wait
-        while (1) {
-
-        }
         // 如果不等待，遇到程序结束，group中的全部task有的可能未执行
 //        dispatch_group_wait(taskGrooup, DISPATCH_TIME_FOREVER);
+#elif kWorkloop
+        NSLog(@"start aync task in work loop");
+        // 串行队列
+//        dispatch_workloop_t wl = dispatch_workloop_create("my.workloop");
+        dispatch_workloop_t wl = dispatch_workloop_create_inactive("my.workloop.inactive");
+        dispatch_workloop_t wl1 = dispatch_workloop_create_inactive("my.workloop.inactive.1");
         
+        //  必须是一个非激活的workloop，才可以配置此项目
+        dispatch_workloop_set_autorelease_frequency(wl, DISPATCH_AUTORELEASE_FREQUENCY_NEVER);
+        //  必须是一个非激活的workloop，才可以配置此项目
+        dispatch_set_qos_class_floor(wl, QOS_CLASS_DEFAULT, -1);
+        // 在非激活的workloop配置完成之后，需要激活，才能添加任务
+        dispatch_activate(wl);
+        
+        //  必须是一个非激活的workloop，才可以配置此项目
+        dispatch_set_qos_class_floor(wl1, QOS_CLASS_DEFAULT, -1000);
+        dispatch_activate(wl1);
+        
+        dispatch_block_t wlbt1 = dispatch_block_create(0, ^{
+            NSLog(@"wlbt 1");
+        });
+        dispatch_async(wl, wlbt1);
+        dispatch_async(wl, ^{
+            NSLog(@"wl 2");
+        });
+        dispatch_async(wl, ^{
+            NSLog(@"wl 3");
+        });
+        dispatch_async(wl, ^{
+            NSLog(@"wl 4");
+        });
+        
+        dispatch_block_t wlt11= dispatch_block_create(0, ^{
+            NSLog(@"wl11 1");
+        });
+        dispatch_async(wl1, wlt11);
 
 #else
         
 #endif
-        
+    }
+    
+    // 此步骤为了防止任务未被执行，程序已经退出了
+    while (1) {
     }
     return 0;
 }

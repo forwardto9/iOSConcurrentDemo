@@ -7,6 +7,8 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		C2B0A58426FDA6CA00CC0B67 /* MyNonConcurrentOperation.m in Sources */ = {isa = PBXBuildFile; fileRef = C2B0A58326FDA6CA00CC0B67 /* MyNonConcurrentOperation.m */; };
+		C2B0A58726FDA6FE00CC0B67 /* MyConcurrentOperation.m in Sources */ = {isa = PBXBuildFile; fileRef = C2B0A58626FDA6FE00CC0B67 /* MyConcurrentOperation.m */; };
 		C2FCECCD222E576E003566B9 /* main.m in Sources */ = {isa = PBXBuildFile; fileRef = C2FCECCC222E576E003566B9 /* main.m */; };
 /* End PBXBuildFile section */
 
@@ -23,6 +25,10 @@
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
+		C2B0A58226FDA6CA00CC0B67 /* MyNonConcurrentOperation.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = MyNonConcurrentOperation.h; sourceTree = "<group>"; };
+		C2B0A58326FDA6CA00CC0B67 /* MyNonConcurrentOperation.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = MyNonConcurrentOperation.m; sourceTree = "<group>"; };
+		C2B0A58526FDA6FE00CC0B67 /* MyConcurrentOperation.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = MyConcurrentOperation.h; sourceTree = "<group>"; };
+		C2B0A58626FDA6FE00CC0B67 /* MyConcurrentOperation.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = MyConcurrentOperation.m; sourceTree = "<group>"; };
 		C2FCECC9222E576E003566B9 /* iOSConcurrentDemo */ = {isa = PBXFileReference; explicitFileType = "compiled.mach-o.executable"; includeInIndex = 0; path = iOSConcurrentDemo; sourceTree = BUILT_PRODUCTS_DIR; };
 		C2FCECCC222E576E003566B9 /* main.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = main.m; sourceTree = "<group>"; };
 /* End PBXFileReference section */
@@ -58,6 +64,10 @@
 			isa = PBXGroup;
 			children = (
 				C2FCECCC222E576E003566B9 /* main.m */,
+				C2B0A58526FDA6FE00CC0B67 /* MyConcurrentOperation.h */,
+				C2B0A58626FDA6FE00CC0B67 /* MyConcurrentOperation.m */,
+				C2B0A58226FDA6CA00CC0B67 /* MyNonConcurrentOperation.h */,
+				C2B0A58326FDA6CA00CC0B67 /* MyNonConcurrentOperation.m */,
 			);
 			path = iOSConcurrentDemo;
 			sourceTree = "<group>";
@@ -118,6 +128,8 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				C2B0A58726FDA6FE00CC0B67 /* MyConcurrentOperation.m in Sources */,
+				C2B0A58426FDA6CA00CC0B67 /* MyNonConcurrentOperation.m in Sources */,
 				C2FCECCD222E576E003566B9 /* main.m in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
